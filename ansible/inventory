@@ -1,0 +1,5 @@
+[frontend]
+18.191.171.150 ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
+
+[backend]
+192.168.1.181 ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-o ProxyCommand="ssh -W %h:%p -i ~/.ssh/id_rsa ubuntu@18.191.171.150"'

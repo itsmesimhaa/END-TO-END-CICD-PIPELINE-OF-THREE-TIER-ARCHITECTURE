@@ -1,0 +1,40 @@
+- hosts: frontend
+  become: true
+  tasks:
+    - name: Update and install Nginx
+      apt:
+        name: nginx
+        state: present
+        update_cache: yes
+
+    - name: Copy static HTML files to Nginx directory
+      copy:
+        src: "{{ playbook_dir }}/frontend/"
+        dest: /var/www/kasturihealthcare/
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Configure Nginx main configuration file
+      template:
+        src: "{{ playbook_dir }}/nginx/nginx.conf"
+        dest: /etc/nginx/nginx.conf
+      notify: Restart Nginx  # Notify handler to restart Nginx if the config is changed
+
+    - name: Configure Nginx site configuration
+      template:
+        src: "{{ playbook_dir }}/nginx/sites-available/kasturihealthcare"
+        dest: /etc/nginx/sites-available/kasturihealthcare
+      notify: Restart Nginx  # Notify handler to restart Nginx if the site config is changed
+
+    - name: Enable Nginx site configuration
+      file:
+        src: /etc/nginx/sites-available/kasturihealthcare
+        dest: /etc/nginx/sites-enabled/kasturihealthcare
+        state: link
+
+  handlers:
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted

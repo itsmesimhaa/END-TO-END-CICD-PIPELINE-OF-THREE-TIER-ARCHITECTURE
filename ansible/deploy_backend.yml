@@ -1,0 +1,115 @@
+- hosts: backend
+  become: true
+  tasks:
+    - name: Ensure python3 and pip are installed
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-venv
+        state: present
+        update_cache: yes
+
+    - name: Create necessary directories
+      file:
+        path: /opt/flask-app/{{ item }}
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+      loop:
+        - templates
+        - static
+
+    - name: Create a virtual environment
+      command:
+        cmd: python3 -m venv /opt/flask-app/venv
+        creates: /opt/flask-app/venv
+
+    - name: Copy requirements.txt to the target server
+      copy:
+        src: "{{ playbook_dir }}/backend/requirements.txt"
+        dest: /opt/flask-app/requirements.txt
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+
+    - name: Copy the static HTML files
+      copy:
+        src: "{{ playbook_dir }}/frontend/"
+        dest: /opt/flask-app/templates/
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Copy the CSS files
+      copy:
+        src: "{{ playbook_dir }}/frontend/styles.css"
+        dest: /opt/flask-app/static/
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Upload application code
+      copy:
+        src: "{{ playbook_dir }}/backend/app.py"
+        dest: /opt/flask-app/
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Set up environment variables
+      copy:
+        src: "{{ playbook_dir }}/backend/.env"
+        dest: /opt/flask-app/
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'
+
+    - name: Install python-dotenv, flask, and pymysql inside virtual environment
+      ansible.builtin.shell: |
+        . /opt/flask-app/venv/bin/activate && pip install python-dotenv flask pymysql
+      args:
+        chdir: /opt/flask-app/
+        executable: /bin/bash
+
+    - name: Install MySQL client
+      package:
+        name: mysql-client
+        state: present
+
+    - name: Create systemd service file for Flask application
+      copy:
+        dest: /etc/systemd/system/flask-app.service
+        content: |
+          [Unit]
+          Description=Flask Application
+          After=network.target
+
+          [Service]
+          User=ubuntu
+          Group=ubuntu
+          WorkingDirectory=/opt/flask-app
+          ExecStart=/opt/flask-app/venv/bin/python /opt/flask-app/app.py
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+      notify:
+        - Reload systemd
+
+    - name: Enable and start Flask application service
+      systemd:
+        name: flask-app
+        enabled: yes
+        state: started
+
+  handlers:
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Restart Flask App
+      systemd:
+        name: flask-app
+        state: restarted
