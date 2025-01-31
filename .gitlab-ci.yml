@@ -1,0 +1,58 @@
+stages:
+  - deploy
+
+deploy_frontend:
+  stage: deploy
+  script:
+    # Install required packages
+    - apt-get update && apt-get install -y python3-venv python3-pip ansible openssh-client
+    # Setup SSH
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo "$ANSIBLE_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -H 18.191.171.150 >> ~/.ssh/known_hosts || true
+    # Test SSH connection
+    - ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@18.191.171.150 "echo SSH connection successful"
+    # Setup Python virtual environment
+    - python3 -m venv /env
+    - source /env/bin/activate
+    - pip install --upgrade pip
+    - pip install -r ansible/backend/requirements.txt
+    # Run Ansible playbook
+    - ansible-playbook -i ansible/inventory ansible/deploy_frontend.yml
+  only:
+    - main
+
+
+deploy_backend:
+
+  stage: deploy
+  timeout: 30m
+  script:
+    # Install required packages
+    - apt-get update && apt-get install -y python3-venv python3-pip ansible openssh-client
+
+    # Setup SSH
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo "$ANSIBLE_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -H 18.191.171.150 >> ~/.ssh/known_hosts || true  # Bastion host
+    - ssh-keyscan -H 192.168.1.181 >> ~/.ssh/known_hosts || true  # Private server
+
+    # Test SSH connection through Bastion with keep-alive options
+    - ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/id_rsa ubuntu@18.191.171.150" -o ServerAliveInterval=60 -o ServerAliveCountMax=3 ubuntu@192.168.1.181 "echo SSH connection successful"
+
+    # Setup Python virtual environment
+    - python3 -m venv ./project_venv  # Use a project-specific directory
+    - source ./project_venv/bin/activate
+    - pip install --upgrade pip
+
+    # Install necessary Python packages from requirements.txt
+    - pip install -r ansible/backend/requirements.txt  # Ensure correct path
+
+    # Run the Ansible playbook to deploy the backend application
+    - ansible-playbook -i ansible/inventory ansible/deploy_backend.yml -vvv
+  only:
+    - main
