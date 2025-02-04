@@ -2,36 +2,39 @@ pipeline {
     agent any
     
     environment {
-        DOCKER_HUB_USER = 'your-dockerhub-username'
-        DOCKER_HUB_PASSWORD = credentials('docker-hub-credentials')
-        FRONTEND_IMAGE = 'your-dockerhub-username/frontend-nginx'
-        BACKEND_IMAGE = 'your-dockerhub-username/backend-flask'
+        FRONTEND_IMAGE = 'itsmesimha/frontend-nginx'
+        BACKEND_IMAGE = 'itsmesimha/backend-flask'
     }
     
     stages {
         stage('Clone Repository') {
             steps {
-                git 'https://github.com/your-username/your-repo.git'
+                git branch: 'main', url: 'https://github.com/itsmesimhaa/END-TO-END-CICD-PIPELINE-OF-THREE-TIER-ARCHITECTURE'
             }
         }
         
         stage('Build and Push Docker Images') {
             steps {
-                script {
-                    sh 'docker build -t $FRONTEND_IMAGE:latest frontend/'
-                    sh 'docker build -t $BACKEND_IMAGE:latest backend/'
+                withCredentials([usernamePassword(credentialsId: 'Docker-credentials', usernameVariable: 'DOCKER_HUB_USER', passwordVariable: 'DOCKER_HUB_PASSWORD')]) {
+                    script {
+                        sh 'docker build -t $FRONTEND_IMAGE:latest frontend/'
+                        sh 'docker build -t $BACKEND_IMAGE:latest backend/'
 
-                    sh 'echo $DOCKER_HUB_PASSWORD | docker login -u $DOCKER_HUB_USER --password-stdin'
-                    sh 'docker push $FRONTEND_IMAGE:latest'
-                    sh 'docker push $BACKEND_IMAGE:latest'
+                        sh 'echo $DOCKER_HUB_PASSWORD | docker login -u $DOCKER_HUB_USER --password-stdin'
+                        sh 'docker push $FRONTEND_IMAGE:latest'
+                        sh 'docker push $BACKEND_IMAGE:latest'
+                        sh 'docker logout'
+                    }
                 }
             }
         }
         
         stage('Trigger Argo CD Deployment') {
             steps {
-                sh 'argocd app sync frontend-app'
-                sh 'argocd app sync backend-app'
+                script {
+                    sh 'argocd app sync frontend-app --wait'
+                    sh 'argocd app sync backend-app --wait'
+                }
             }
         }
     }
